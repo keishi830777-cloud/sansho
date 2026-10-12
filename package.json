@@ -1,6 +1,6 @@
 {
   "name": "sansho-carnival",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,9 +11,10 @@
     "test:browser": "node scripts/browser-test.mjs",
     "preview": "vite preview --host 0.0.0.0",
     "assets:ogp": "node scripts/generate-ogp.mjs",
-    "test:production": "node scripts/production-check.mjs",
+    "test:production": "TEST_URL=http://127.0.0.1:4173 node scripts/browser-test.mjs",
     "build:standalone": "npm run build && node scripts/build-standalone.mjs",
-    "build:pages": "npm run build:standalone && node scripts/build-pages.mjs"
+    "build:pages": "npm run build:standalone && node scripts/build-pages.mjs",
+    "test:pages": "TEST_URL=http://127.0.0.1:4174/sansho/ node scripts/browser-test.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.0",

@@ -1,78 +1,66 @@
 import { chromium } from '@playwright/test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
-const baseURL = process.env.TEST_URL || 'http://127.0.0.1:5173';
+const base = process.env.TEST_URL || 'http://127.0.0.1:5173';
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', headless: true, args: ['--no-sandbox'] });
-await fs.mkdir('test-results', { recursive: true });
-const errors = [];
+await fs.mkdir('test-results', { recursive: true }); const errors = [];
 try {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 1100 }, acceptDownloads: true });
-  const page = await context.newPage();
-  page.on('pageerror', error => errors.push(error.message));
-  await page.goto(baseURL); await page.locator('#start').waitFor();
-  await page.screenshot({ path: 'test-results/desktop-title.png', fullPage: true });
-  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
-  // Real-time session: actual pointer input; no model/time manipulation.
-  await page.locator('#start').click();
-  const start = Date.now(); let taps = 0;
-  while (Date.now() - start < 32_500 && await page.locator('#result-screen').isHidden()) {
-    const target = await page.evaluate(() => {
-      const game = window.__ouo?.game;
-      const b = game?.buckets.find(b => b.y > 40 && b.y < 400);
-      const rect = document.querySelector('#game').getBoundingClientRect();
-      return b ? { x: rect.left + b.x / 420 * rect.width, y: rect.top + b.y / 640 * rect.height, time: game.elapsed } : undefined;
-    });
-    if (target) { await page.mouse.click(target.x, target.y); taps++; }
-    if (Date.now() - start > 24_000 && Date.now() - start < 24_400) await page.screenshot({ path: 'test-results/desktop-playing.png' });
-    await page.waitForTimeout(60);
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, acceptDownloads: true });
+  page.on('pageerror', e => errors.push(e.message)); await page.goto(base); await page.locator('#hold').waitFor();
+  await page.screenshot({ path: 'test-results/v2-desktop-ready.png', fullPage: true });
+  const hold = await page.locator('#hold').boundingBox();
+  await page.mouse.move(hold.x + hold.width / 2, hold.y + hold.height / 2); await page.mouse.down();
+  const start = Date.now(); let chargeScreenshot = false;
+  while (Date.now() - start < 5000) {
+    const p = Number(await page.locator('#pressure').getAttribute('aria-valuenow'));
+    if (p >= 95) break;
+    if (p >= 60 && !chargeScreenshot) { chargeScreenshot = true; await page.screenshot({ path: 'test-results/v2-charging.png' }); }
+    await page.waitForTimeout(20);
   }
-  await page.locator('#result-screen').waitFor({ state: 'visible' });
-  const duration = Date.now() - start;
-  assert.ok(duration >= 30_000 && duration < 34_000, `Unexpected duration ${duration}`);
-  assert.ok(taps >= 35, `Only ${taps} taps`);
-  assert.equal(await page.locator('#result-missed').innerText(), '0');
-  assert.equal(await page.locator('#result-panic').innerText(), '0');
-  assert.ok(Number((await page.locator('#result-score').innerText()).replaceAll(',', '')) > 8000);
-  await page.screenshot({ path: 'test-results/desktop-result.png', fullPage: true });
-  const downloadPromise = page.waitForEvent('download'); await page.locator('#save-image').click();
-  const download = await downloadPromise; await download.saveAs('test-results/shared-result.png');
-  const bytes = await fs.readFile('test-results/shared-result.png'); assert.equal(bytes.readUInt32BE(16), 1080); assert.equal(bytes.readUInt32BE(20), 1920);
-  await page.locator('#copy-url').click(); await page.locator('#toast.visible').waitFor();
-  await page.locator('#result-screen .learn-open').click(); assert.equal(await page.locator('#learn-dialog').isVisible(), true);
-  assert.equal(await page.locator('#learn-dialog article').count(), 4); await page.locator('#learn-dialog .primary').click();
-  await page.locator('#retry').click(); assert.equal(await page.locator('#score').innerText(), '0');
-  await page.locator('#pause').click(); const before = await page.locator('#timer').innerText(); await page.waitForTimeout(1100); assert.equal(await page.locator('#timer').innerText(), before);
-  await page.locator('#resume').click();
-  // Settings pause and persistence.
-  await page.locator('#settings-open').click(); await page.locator('#mute-setting').check(); await page.locator('#motion').check();
-  await page.locator('#settings-dialog .dialog-close').click(); await page.reload();
-  assert.match(await page.locator('#mute').innerText(), /OFF/); assert.ok(Number((await page.locator('#title-best').innerText()).replaceAll(',', '')) > 8000);
-  console.log(`PASS desktop: ${duration}ms round, ${taps} pointer catches, retry, pause, learning, download 1080×1920, saved settings/best`);
-  // Mobile touch and deliberate misses with the browser's virtual clock.
-  const mobile = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
-  const phone = await mobile.newPage(); phone.on('pageerror', error => errors.push(error.message));
-  await phone.clock.install(); await phone.goto(baseURL); await phone.screenshot({ path: 'test-results/mobile-title.png', fullPage: true });
+  await page.mouse.up(); assert.equal(await page.locator('#flight-label').isVisible(), true);
+  await page.waitForTimeout(700); await page.screenshot({ path: 'test-results/v2-flight.png' });
+  await page.locator('#result').waitFor({ state: 'visible', timeout: 12000 });
+  assert.ok(Number((await page.locator('#result-score').innerText()).replaceAll(',', '')) > 1500);
+  assert.match(await page.locator('#result-rank').innerText(), /限界寸前/);
+  await page.screenshot({ path: 'test-results/v2-desktop-result.png', fullPage: true });
+  const downloadPromise = page.waitForEvent('download'); await page.locator('#save').click(); const download = await downloadPromise; await download.saveAs('test-results/v2-result.png');
+  const png = await fs.readFile('test-results/v2-result.png'); assert.equal(png.readUInt32BE(16), 1080); assert.equal(png.readUInt32BE(20), 1920);
+  await page.locator('#settings').click(); await page.locator('#audio-setting').uncheck(); await page.locator('#motion').check(); await page.locator('#close-settings').click(); await page.reload();
+  assert.equal(await page.locator('#mute').innerText(), '♪ OFF'); assert.ok(Number((await page.locator('#best').innerText()).replaceAll(',', '')) > 1500);
+  console.log('PASS desktop real pointer: near-limit launch, altitude/score, PNG 1080×1920, saved mute/motion/best');
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+  const phone = await context.newPage(); phone.on('pageerror', e => errors.push(e.message)); await phone.clock.install(); await phone.goto(base);
+  await phone.screenshot({ path: 'test-results/v2-mobile-ready.png', fullPage: true });
   assert.equal(await phone.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
-  await phone.locator('#start').tap(); await phone.clock.runFor(1500);
-  const target = await phone.evaluate(() => { const b = window.__ouo.game.buckets.find(b => b.y > 20); const r = document.querySelector('#game').getBoundingClientRect(); return { x: r.left + b.x / 420 * r.width, y: r.top + b.y / 640 * r.height }; });
-  await phone.touchscreen.tap(target.x, target.y); await phone.touchscreen.tap(target.x, target.y);
-  assert.equal(await phone.locator('#score').innerText(), '100');
-  await phone.clock.runFor(24500); await phone.screenshot({ path: 'test-results/mobile-carnival.png', fullPage: true });
-  assert.ok(await phone.evaluate(() => window.__ouo.game.years > 0));
-  await phone.clock.runFor(6000); assert.equal(await phone.locator('#result-screen').isVisible(), true);
-  assert.ok(Number(await phone.locator('#result-panic').innerText()) > 300);
-  await phone.screenshot({ path: 'test-results/mobile-result.png', fullPage: true });
-  await phone.locator('#native-share').tap(); // Unsupported native share uses clipboard/manual text fallback.
-  await phone.locator('#retry').tap(); assert.equal(await phone.locator('#score').innerText(), '0');
-  assert.equal(await phone.evaluate(() => document.querySelector('#game').getBoundingClientRect().bottom <= innerHeight), true);
-  console.log('PASS mobile: 390px layout, touch, duplicate prevention, carnival misses, result, share fallback, retry');
-  // Narrow 320px layout and local storage failure remain playable.
-  const narrow = await browser.newPage({ viewport: { width: 320, height: 740 }, isMobile: true, hasTouch: true });
-  await narrow.addInitScript(() => { Storage.prototype.setItem = () => { throw new DOMException('Blocked', 'SecurityError'); }; Storage.prototype.getItem = () => { throw new DOMException('Blocked', 'SecurityError'); }; });
-  await narrow.goto(baseURL); await narrow.locator('#start').tap();
-  assert.equal(await narrow.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
-  await narrow.screenshot({ path: 'test-results/mobile-320.png', fullPage: true });
-  console.log('PASS narrow 320px + unavailable localStorage');
-  assert.deepEqual(errors, [], 'Browser JavaScript errors');
-  await fs.writeFile('test-results/browser-summary.json', JSON.stringify({ realRoundMs: duration, pointerCatches: taps, errors, mobile: 'passed', resultImage: '1080x1920' }, null, 2));
+  const cdp = await context.newCDPSession(phone);
+  const h = await phone.locator('#hold').boundingBox(); const x = h.x + h.width / 2, y = h.y + h.height / 2;
+  assert.ok(y < 844);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+  await phone.clock.runFor(230); await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + 55, y }] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await phone.clock.runFor(1500);
+  assert.equal(await phone.locator('#result-title').innerText(), 'ぴょ。');
+  await phone.locator('#retry').tap();
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] }); await phone.clock.runFor(7000);
+  assert.equal(await phone.locator('#result-title').innerText(), 'オウオ、決壊。'); assert.equal(await phone.locator('#result-score').innerText(), '0');
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await phone.screenshot({ path: 'test-results/v2-mobile-bust.png', fullPage: true });
+  await phone.locator('#retry').tap();
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] }); await phone.clock.runFor(1700);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] }); assert.equal(await phone.locator('#ready').isVisible(), true); assert.equal(await phone.locator('#result').isVisible(), false);
+  // Perfect keyboard shot on the same engine, using only visible feedback.
+  await phone.locator('#hold').focus(); await phone.keyboard.down('Space');
+  for (let i = 0; i < 250; i++) { await phone.clock.runFor(20); if (Number(await phone.locator('#pressure').getAttribute('aria-valuenow')) >= 95) break; }
+  await phone.keyboard.up('Space'); await phone.clock.runFor(9000); assert.equal(await phone.locator('#result').isVisible(), true);
+  assert.match(await phone.locator('#result-rank').innerText(), /限界寸前/);
+  await phone.screenshot({ path: 'test-results/v2-mobile-result.png', fullPage: true });
+  await phone.evaluate(() => { window.shared = null; Object.defineProperty(navigator, 'canShare', { value: () => true, configurable: true }); Object.defineProperty(navigator, 'share', { value: async data => { window.shared = { text: data.text, type: data.files[0].type, size: data.files[0].size }; }, configurable: true }); });
+  await phone.locator('#share').tap(); await phone.waitForFunction(() => window.shared !== null, null, { polling: 50 }); const shared = await phone.evaluate(() => window.shared); assert.equal(shared.type, 'image/png'); assert.ok(shared.size > 10000); assert.match(shared.text, /サンショウオウオ/);
+  console.log('PASS mobile touch: early release, steering, overcharge, cancel, retry, perfect keyboard shot, native PNG payload (stubbed)');
+  for (const viewport of [{width:320,height:568},{width:375,height:667},{width:1024,height:768}]) {
+    const small = await browser.newPage({viewport,isMobile:true,hasTouch:true}); small.on('pageerror',e=>errors.push(e.message)); await small.goto(base);
+    assert.equal(await small.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    const button = await small.locator('#hold').boundingBox(); assert.ok(button.y + button.height <= viewport.height, JSON.stringify({viewport,button})); await small.close();
+  }
+  console.log('PASS viewport 320×568 / 375×667 / iPad landscape 1024×768');
+  assert.deepEqual(errors, []); console.log('PASS no JavaScript errors');
 } finally { await browser.close(); }

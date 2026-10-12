@@ -1,168 +1,134 @@
 import './style.css';
-import { Game, resultText, type Result, type Signal } from './game';
-import { CONFIG, EVENT_LABELS, STAGES } from './config';
-import { Renderer } from './renderer';
+import { Shot, SHOT, type ShotResult } from './shot';
+import { ShotRenderer } from './shot-renderer';
 import { Sound } from './audio';
-import { preferences, bestScore, saveValue } from './storage';
-import { copyText, downloadImage, gameUrl, imageBlob, resultCanvas, shareText } from './share';
+import { preferences, readValue, saveValue } from './storage';
+import { ouo } from './art';
 
-const $ = <T extends HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
-const icon = '<img src="/favicon.svg" alt="" width="38" height="38">';
+const $ = <T extends HTMLElement>(s: string) => document.querySelector<T>(s)!;
 $('#app').innerHTML = `
-<header class="site-header"><a href="#" class="brand" aria-label="タイトルへ">${icon}<span>OUO! <small>RIVER ARCADE</small></span></a><button id="settings-open" class="icon-button" aria-label="音量・演出の設定">☷ <span>設定</span></button></header>
-<main class="layout">
-  <aside class="side intro-side"><p class="eyebrow">WELCOME TO THE RIVER</p><h2>オウオが、増える。<br>増える。<br><em>増えすぎる！！</em></h2><p class="side-copy">平和な川に、まさかの大騒動。<br>あなたの指で、バケツを止めろ。</p><div class="how-card"><span class="number">01</span><div><strong>バケツをタップ！</strong><p>落ちる前に止めて、川を守ろう。</p></div></div><div class="how-card"><span class="number">02</span><div><strong>つなげ、オウオコンボ。</strong><p>連続成功で、スコア最大3倍！</p></div></div><div class="how-card"><span class="number">03</span><div><strong>30秒で、お祭り騒ぎ。</strong><p>ミスしても最後まで遊べるよ。</p></div></div><div class="side-note">指1本でOK <span>↗</span> 登録・インストール不要</div></aside>
-  <section class="arcade" aria-label="サンショウオウオカーニバル">
-    <div class="cabinet-top"><span><i></i> OUO! RIVER NO. 01</span><span>30 SEC CHALLENGE</span></div>
-    <div class="hud" id="hud"><div><span class="hud-label">SCORE</span><strong id="score">0</strong></div><div class="combo-block"><span class="hud-label">COMBO</span><strong id="combo">—</strong></div><div class="timer-block"><span class="hud-label">TIME</span><strong id="timer">30<span> s</span></strong></div></div>
-    <div class="game-stage" id="stage">
-      <canvas id="game" tabindex="0" role="application" aria-label="落ちてくるバケツをタップ。キーボードではスペースで一番下のバケツを阻止。30秒で終了。"></canvas>
-      <section id="title-screen" class="title-screen screen">
-        <span class="edition">ぬめり満点・30秒チャレンジ</span>
-        <h1><span>サンショウオウオ</span><b>カーニバル<span class="title-star">✷</span></b></h1>
-        <p class="subtitle">オウオ大増殖パニック</p>
-        <p class="title-story">平和な川に、今日も<br>オウオが暮らしている。</p>
-        <div class="start-wrap"><span class="start-note">バケツを止めろ！！！</span><button id="start" class="primary">30秒、川を守る！ <span>↗</span></button><p class="control-hint">バケツをタップ / クリックで阻止</p></div>
-        <span class="speech-bubble">オウ？</span>
-        <div class="best-pill">BEST <b id="title-best">0</b> <span>pts</span></div>
-      </section>
-      <div id="play-overlay" class="play-overlay" hidden><div class="play-top"><span id="stage-label">平和なオウオ川</span><span id="multiplier">×1.0</span></div><div id="callout" class="callout"></div><div id="event-banner" class="event-banner"></div><div id="generation" class="generation"></div><div class="river-caption"><span id="river-message">バケツが川に落ちる前にタップ！</span><small id="time-note">川の変化は長い年月を早送りした演出です</small></div><button id="pause" class="pause-button" aria-label="一時停止">Ⅱ</button></div>
-      <div id="pause-screen" class="pause-screen screen" hidden><span class="eyebrow">TAKE A BREATH</span><h2>川もちょっと、ひと休み。</h2><p>残り時間は止まっています。</p><button id="resume" class="primary">つづける ↗</button></div>
-      <div id="finish-screen" class="finish-screen screen" hidden><span>30秒、おつかれオウ！</span><strong>オウオーー！</strong></div>
-    </div>
-    <div class="cabinet-bottom"><span>● <span id="status-text">平和な川で、待ってるオウ。</span></span><button id="mute" aria-label="音をミュート">♪ ON</button></div>
-  </section>
-  <aside class="side mood-side"><div class="sticker">NO BUCKET.<br><b>MORE OUO!</b><span>✳</span></div><div class="river-report"><span class="eyebrow">TODAY'S RIVER</span><h3>かわいい。<br>でも、油断禁物。</h3><p>止めるのは、バケツ。<br>川のオウオたちは<br>ただ、暮らしているだけ。</p><span class="report-line"></span><p class="tiny">見逃した先に待つのは、<br>ぬめぬめのカーニバル。</p></div><button class="text-link learn-open">川のほんとの話 <span>↗</span></button></aside>
+<div class="shell">
+<header><a class="brand" href="#" aria-label="サンショウオウオカーニバル"><img src="/favicon.svg" width="34" height="34" alt=""><span>サンショウオウオ<br><b>カーニバル</b></span></a><div class="header-tools"><button id="mute" aria-label="音を切り替える">♪ OFF</button><button id="settings" aria-label="設定">⚙</button><span class="edition-tag">VOL. 02 / ONE SHOT</span></div></header>
+<main>
+<aside class="manifesto"><span class="kicker"><i></i> ONE FINGER. ONE SHOT. ALL OUO.</span><h1>指を離すと、<br><em>宇宙が<br>始まる。</em><span class="asterisk">✳</span></h1><p class="intro">川の底に、カーニバルをためろ。<br>爆ぜる寸前。その指を、離せ。</p><div class="instructions"><div><span>01</span><p><b>押し続ける。</b>オウオがふくらむ。</p></div><div><span>02</span><p><b>横へずらす。</b>空の輪を狙う。</p></div><div><span>03</span><p><b>ピンクになったら、離せ。</b></p></div></div><p class="manifesto-note">一発勝負。ためすぎると、川が抜ける。</p><div class="best-sticker"><span>YOUR BEST CARNIVAL</span><b id="desktop-best">0</b><small>OUO POINTS</small></div></aside>
+<section class="machine" aria-label="一発オウオ砲">
+<div class="machine-top"><span><i></i> 一発オウオ砲</span><span id="phase">READY TO OUO</span></div>
+<div id="stage" class="stage">
+<canvas id="game" aria-label="オウオが宇宙へ飛ぶ様子"></canvas>
+<div class="stage-grain"></div>
+<div id="ready" class="ready"><span class="small-pill">ためて。狙って。離せ。</span><h2>一発で、<br><em>全部オウオ。</em></h2><p>気持ちよくなるまで、<br>あと指一本。</p></div>
+<div id="live" class="live" hidden><div class="live-top"><div><small>OUO ALTITUDE</small><b id="altitude">0<span>m</span></b></div><span id="chain">0 連鎖</span></div><p id="callout"></p></div>
+<div id="charge-copy" class="charge-copy" hidden><span id="charge-label">まだ、ためろ。</span><strong id="pressure" role="progressbar" aria-label="オウオ圧" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">0<small>%</small></strong><p id="charge-sub">横へずらして、輪を狙え。</p></div>
+<button id="hold" class="hold-button" aria-label="押し続けてためる。左右へ動かして狙い、離して発射。スペースキーでも操作できます。"><span id="hold-label">押し続けろ</span><small id="hold-sub">HOLD TO OUO</small></button>
+<div id="flight-label" class="flight-label" hidden><b id="flight-title">オウオ、出発。</b><span>空の輪で、カーニバル連鎖。</span></div>
+<section id="result" class="result" hidden aria-labelledby="result-title"><span class="result-eyebrow">YOUR ONE SHOT CARNIVAL</span><h2 id="result-title"></h2><p id="result-comment"></p><div class="score-display"><b id="result-score">0</b><span>OUO POINTS <i id="new-best" hidden>NEW BEST</i></span></div><div class="result-stats"><div><b id="result-height"></b><small>最高到達点</small></div><div><b id="result-rings"></b><small>カーニバル連鎖</small></div><div><b id="result-pressure"></b><small>発射オウオ圧</small></div></div><div class="result-rank" id="result-rank"></div><button id="retry" class="retry">もう一発、オウオ。<span>↗</span></button><div class="share-actions"><button id="share">↗ 結果をシェア</button><button id="save">↓ 画像にする</button></div><textarea id="copy-fallback" aria-label="共有文章を選択してコピー" readonly hidden></textarea><button id="reset" class="reset">タイトルにもどる</button></section>
+</div>
+<div class="machine-bottom"><span id="bottom-tip">ピンクの瞬間が、いちばん飛ぶ。</span><span>BEST <b id="best">0</b></span></div>
+</section>
 </main>
-<section id="result-screen" class="result-section" hidden aria-labelledby="result-heading"><div class="result-card"><p class="eyebrow">RIVER REPORT / 30 SECONDS LATER</p><h2 id="result-heading">おつかれオウ！</h2><span id="result-title" class="result-title"></span><p class="score-caption">放流阻止スコア <span id="new-best" hidden>NEW BEST!</span></p><strong id="result-score" class="result-score">0</strong><span class="points">POINTS</span><div class="result-stats"><div><b id="result-combo"></b><span>最高コンボ</span></div><div><b id="result-caught"></b><span>放流阻止</span></div><div><b id="result-missed"></b><span>見逃し</span></div></div><div class="panic-box"><div><span>オウオパニック指数</span><small>川のお祭り度。スコアとは別だよ！</small></div><strong id="result-panic"></strong></div><p id="result-comment" class="result-comment"></p><button id="retry" class="primary">もう一回、オウオ！ ↻</button><div class="share-grid"><button id="save-image">↓ 結果画像を保存</button><button id="native-share">↗ 結果をシェア</button><button id="share-x">𝕏 投稿文をつくる</button><button id="copy-url">⌁ URLをコピー</button></div><p id="share-hint" class="tiny">1080 × 1920px・ストーリーズサイズ</p><details id="manual-copy" hidden><summary>投稿文・URLを選択してコピー</summary><textarea id="share-copy" readonly aria-label="共有用テキスト"></textarea></details><button class="learn-open learning-teaser"><span>実は、笑えない話があります。</span><b>この川の「本当」を知る ↗</b></button><button id="back-title" class="text-link">タイトルへ戻る</button></div></section>
-<footer><span>GAME IS SILLY. SCIENCE IS SERIOUS.</span><p>ゲームは全力でバカ。でも科学は本気。</p><small>「オウオ」は架空の掛け声です。実際の鳴き声ではありません。</small></footer>
-<dialog id="settings-dialog" aria-labelledby="settings-heading"><div class="dialog-top"><span class="eyebrow">MAKE YOURSELF COMFORTABLE</span><button class="dialog-close" aria-label="設定を閉じる">×</button></div><h2 id="settings-heading">オウオの設定</h2><label class="setting-row">音をミュート <input id="mute-setting" type="checkbox"></label><label class="volume-row" for="volume">音量 <output id="volume-value"></output></label><input id="volume" type="range" min="0" max="100" step="5"><label class="setting-row">画面揺れ・動きを軽減 <input id="motion" type="checkbox"></label><p class="tiny">設定はこのブラウザに保存されます。<br>音はスタートを押したあとに再生します。</p></dialog>
-<dialog id="learn-dialog" class="learn-dialog" aria-labelledby="learn-heading"><div class="dialog-top"><span class="eyebrow">THE REAL RIVER</span><button class="dialog-close" aria-label="川の話を閉じる">×</button></div><h2 id="learn-heading">オウオは悪くない。<br>川の未来は、私たちに。</h2><p class="learn-lead">実は、笑えない話があります。</p><article><span>01 / WHAT'S HAPPENING</span><h3>何が起きている？</h3><p>日本固有のオオサンショウウオと、人が持ち込んだ外来のオオサンショウウオとの交雑が問題になっています。生きものたちが悪いわけではありません。</p></article><article><span>02 / OVER GENERATIONS</span><h3>交雑するとどうなる？</h3><p>世代を重ねることで、本来の地域個体群が持っていた遺伝的特徴が失われる可能性があります。守りたいのは、生物多様性と地域固有の遺伝的特徴です。</p></article><article><span>03 / LOOKS AREN'T EVERYTHING</span><h3>見た目ではわからない。</h3><p>外見だけで交雑個体を確実に判別することは難しく、遺伝子解析などを含む適切な調査が必要です。遺伝子解析にも、調べる指標や比較資料による限界があります。専門家が複数の情報から判断します。</p></article><article><span>04 / OUR NEXT MOVE</span><h3>勝手に移動させない。放さない。</h3><p>野生動物を勝手に移動させたり、自然へ放したりしないこと。見つけても自分で捕獲・駆除せず、自治体などの専門窓口へ。保全には継続的な調査・管理と専門的な判断が必要です。</p></article><div class="science-note"><strong>このゲームの「増殖」について</strong><p>30秒は、長い年月と世代交代を早送りした誇張表現です。交雑によって必ず個体数が爆発的に増えるわけではありません。色や模様は演出で、在来・外来・交雑を示しません。侵入後の群れは、これらが混在する状況を表しています。</p></div><div class="sources"><h3>もっと知る・出典</h3><a href="https://www.env.go.jp/nature/intro/2outline/attention/chugokuoosanshouo.html" target="_blank" rel="noopener noreferrer">環境省：チュウゴクオオサンショウウオと交雑種 ↗</a><a href="https://www.env.go.jp/nature/intro/2outline/manual/4hp_ryoseirui.pdf" target="_blank" rel="noopener noreferrer">環境省：特定外来生物の同定マニュアル・両生類（PDF）↗</a><a href="https://www.env.go.jp/nature/intro/2outline/invasive.html#sec4" target="_blank" rel="noopener noreferrer">環境省：外来種被害予防三原則 ↗</a><p class="tiny">2026年10月12日に本文を確認。解説は資料をもとにやさしく要約しています。ゲームの数値や色分けは生物学的な測定・判定ではありません。</p></div><button class="primary dialog-close">川にもどる ↗</button></dialog>
+<footer><span>NO SECOND SHOT. JUST ANOTHER CARNIVAL.</span><small>これは架空のオウオ宇宙です。実際の生態とは関係ありません。</small></footer>
+</div>
+<dialog id="settings-dialog"><div class="dialog-head"><h2>オウオの設定</h2><button id="close-settings" aria-label="設定を閉じる">×</button></div><label>音を出す<input id="audio-setting" type="checkbox"></label><label>音量<input id="volume" type="range" min="0" max="100" step="5"></label><label>画面の動きを軽減<input id="motion" type="checkbox"></label><p>音は押し始めてから再生します。<br>設定はこのブラウザに保存されます。</p></dialog>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>`;
 
 const settings = preferences();
-const sound = new Sound(settings), renderer = new Renderer($('#game'));
-let game: Game | undefined, mode: 'title' | 'playing' | 'finishing' | 'result' = 'title';
-let paused = false, finishTime = 0, last = performance.now(), best = bestScore();
-let currentResult: Result | undefined, resultLabel = { title: '', comment: '' }, resultImage: Promise<Blob> | undefined;
-let calloutUntil = 0, eventUntil = 0, generationUntil = 0, toastTimer: ReturnType<typeof setTimeout>;
-const show = (selector: string, visible: boolean) => { $(selector).hidden = !visible; };
-const number = (n: number) => n.toLocaleString('ja-JP');
-function toast(message: string) { $('#toast').textContent = message; $('#toast').classList.add('visible'); clearTimeout(toastTimer); toastTimer = setTimeout(() => $('#toast').classList.remove('visible'), 3500); }
-function updateSettings() {
+// Keep the user's sound preference. First-time players start with sound enabled on touch.
+const sound = new Sound(settings), renderer = new ShotRenderer($('#game'));
+let shot = new Shot();
+const storedBest = readValue<unknown>('ouo-shot-best', 0);
+let best = typeof storedBest === 'number' && Number.isFinite(storedBest) ? Math.max(0, storedBest) : 0;
+let pointer: number | undefined, startX = 0, lastTime = performance.now(), resultShown = false;
+let toastTimeout: ReturnType<typeof setTimeout>;
+const show = (s: string, value: boolean) => { $(s).hidden = !value; };
+const fmt = (n: number) => n.toLocaleString('ja-JP');
+function toast(text: string) { $('#toast').textContent = text; $('#toast').classList.add('visible'); clearTimeout(toastTimeout); toastTimeout = setTimeout(() => $('#toast').classList.remove('visible'), 3500); }
+function syncSettings() {
   sound.update(settings); saveValue('ouo-settings', settings);
-  $('#mute').textContent = settings.muted ? '♪ OFF' : '♪ ON'; $('#mute').setAttribute('aria-label', settings.muted ? '音をオン' : '音をミュート');
-  $<HTMLInputElement>('#mute-setting').checked = settings.muted; $<HTMLInputElement>('#motion').checked = settings.reducedMotion;
-  $<HTMLInputElement>('#volume').value = String(settings.volume * 100); $('#volume-value').textContent = `${Math.round(settings.volume * 100)}%`;
+  $('#mute').textContent = settings.muted ? '♪ OFF' : '♪ ON'; $('#mute').setAttribute('aria-label', settings.muted ? '音をオンにする' : '音をミュートする');
+  $<HTMLInputElement>('#audio-setting').checked = !settings.muted; $<HTMLInputElement>('#volume').value = String(settings.volume * 100); $<HTMLInputElement>('#motion').checked = settings.reducedMotion;
   document.body.classList.toggle('reduced-motion', settings.reducedMotion);
 }
-function syncHUD() {
-  $('#score').textContent = number(game?.score ?? 0); $('#combo').textContent = game?.combo ? `${game.combo}` : '—';
-  $('#timer').innerHTML = `${Math.ceil(game?.remaining ?? 30)}<span> s</span>`;
-  $('.timer-block').classList.toggle('urgent', !!game && game.remaining <= 5);
-  $('#multiplier').textContent = `×${(game?.multiplier ?? 1).toFixed(1)}`;
-  $('#stage-label').textContent = STAGES[game?.stage ?? 0];
+function syncBest() { $('#best').textContent = fmt(best); $('#desktop-best').textContent = fmt(best); }
+function begin() {
+  if (!shot.press()) return; void sound.unlock(); show('#ready', false); show('#charge-copy', true); $('#phase').textContent = 'OUO UNDER PRESSURE';
+  $('#hold-label').textContent = 'まだ、離すな。'; $('#hold-sub').textContent = '← 横にずらして狙う →'; document.body.classList.add('charging'); lastTime = performance.now();
 }
-function start() {
-  void sound.unlock(); sound.reset(); game = new Game(); renderer.reset(); paused = false; mode = 'playing'; last = performance.now();
-  calloutUntil = eventUntil = generationUntil = 0;
-  $('#callout').textContent = 'バケツを止めろ！！！'; calloutUntil = 2.5; $('#event-banner').textContent = ''; $('#generation').textContent = '';
-  show('#title-screen', false); show('#result-screen', false); show('#finish-screen', false); show('#pause-screen', false); show('#play-overlay', true); show('.layout', true);
-  $('#river-message').textContent = 'バケツが川に落ちる前にタップ！'; $('#status-text').textContent = '狙うのは、バケツだけ！';
-  document.body.classList.add('is-playing'); syncHUD(); $('#game').focus({ preventScroll: true });
-  if (matchMedia('(max-width: 760px)').matches) $('.arcade').scrollIntoView({ block: 'start', behavior: 'instant' });
+function release() { if (shot.release()) { sound.launch(shot.perfect); processEvents(); show('#charge-copy', false); show('#live', true); show('#hold', false); show('#flight-label', true); $('#flight-title').textContent = shot.perfect ? 'カーニバァァル！！' : shot.launchPressure < .2 ? 'ぴょ。' : 'オウオ、出発。'; $('#callout').textContent = shot.perfect ? '限界突破オウオ！' : ''; $('#phase').textContent = 'OUO IS IN THE AIR'; document.body.classList.remove('charging'); document.body.classList.toggle('perfect', shot.perfect); } }
+function reset() {
+  pointer = undefined; sound.stopCharge(); shot = new Shot(); renderer.reset(); resultShown = false; lastTime = performance.now();
+  show('#ready', true); show('#hold', true); show('#result', false); show('#live', false); show('#charge-copy', false); show('#flight-label', false); show('#copy-fallback', false);
+  $('#phase').textContent = 'READY TO OUO'; $('#hold-label').textContent = '押し続けろ'; $('#hold-sub').textContent = 'HOLD TO OUO'; $('#bottom-tip').textContent = 'ピンクの瞬間が、いちばん飛ぶ。';
+  document.body.classList.remove('charging', 'perfect', 'busted'); $('#hold').focus({ preventScroll: true });
 }
-function setPaused(value: boolean) {
-  if (mode !== 'playing') return; paused = value; last = performance.now(); show('#pause-screen', value); $('#status-text').textContent = value ? 'ひと休み中。' : '狙うのは、バケツだけ！';
-  if (value) $('#resume').focus({ preventScroll: true });
-}
-function handleSignal(signal: Signal) {
-  renderer.signal(signal, settings.reducedMotion);
-  if (signal.kind === 'hit') {
-    sound.cue(signal.combo);
-    $('#callout').textContent = signal.combo >= 20 ? 'カーニバァァル！！' : signal.combo >= 10 ? 'サンショウオウオ！' : signal.combo >= 5 ? 'オウオウオ！' : signal.combo > 1 ? 'オウオ！' : 'オウ！';
-    calloutUntil = game!.elapsed + 0.72;
+function cancel() { if (shot.mode === 'charging') { shot.cancel(); sound.stopCharge(); show('#ready', true); show('#charge-copy', false); $('#hold-label').textContent = '押し続けろ'; $('#hold-sub').textContent = 'HOLD TO OUO'; $('#phase').textContent = 'READY TO OUO'; document.body.classList.remove('charging', 'perfect'); } pointer = undefined; }
+function processEvents() {
+  for (const event of shot.drain()) {
+    renderer.event(event, shot);
+    if (event.kind === 'ring') sound.ring(shot.ringsHit);
+    if (event.kind === 'rupture') { sound.rupture(); document.body.classList.remove('charging'); document.body.classList.add('busted'); show('#charge-copy', false); show('#hold', false); $('#phase').textContent = 'TOO MUCH OUO'; }
+    if (event.kind === 'end') showResult();
   }
-  if (signal.kind === 'miss') { sound.miss(); $('#river-message').textContent = game!.missed >= 10 ? '川より先に、こっちがパニック。' : 'あっ。オウオがやってきた。'; }
-  if (signal.kind === 'generation') { $('#generation').innerHTML = `<strong>${signal.years}年後！</strong><span>世代交代を早送り中</span>`; generationUntil = game!.elapsed + 2.5; }
-  if (signal.kind === 'event') { $('#event-banner').textContent = EVENT_LABELS[signal.event]; eventUntil = game!.elapsed + CONFIG.events.duration; }
-  if (signal.kind === 'finish') { mode = 'finishing'; finishTime = 0; show('#play-overlay', false); show('#finish-screen', true); sound.finish(); }
 }
-function processSignals() { for (const signal of game?.drain() ?? []) handleSignal(signal); }
-function finish() {
-  mode = 'result'; currentResult = game!.result; resultLabel = resultText(currentResult);
-  const newBest = currentResult.score > best; best = Math.max(best, currentResult.score); saveValue('ouo-best', best);
-  $('#title-best').textContent = number(best); $('#result-score').textContent = number(currentResult.score); $('#result-title').textContent = resultLabel.title; $('#result-comment').textContent = `「${resultLabel.comment}」`;
-  for (const key of ['combo', 'caught', 'missed', 'panic'] as const) $(`#result-${key}`).textContent = number(key === 'combo' ? currentResult.bestCombo : currentResult[key]);
-  show('#new-best', newBest); show('.layout', false); show('#result-screen', true); show('#finish-screen', false);
-  document.body.classList.remove('is-playing');
-  resultImage = imageBlob(resultCanvas(currentResult, resultLabel.title, resultLabel.comment)); resultImage.catch(() => {});
-  const canFileShare = typeof navigator.canShare === 'function' && navigator.canShare({ files: [new File([''], 'result.png', { type: 'image/png' })] });
-  $('#native-share').textContent = canFileShare ? '↗ 結果をシェア' : '↗ 文章をシェア';
-  $('#share-hint').textContent = canFileShare ? '1080 × 1920px・ストーリーズサイズ' : '画像共有に非対応の環境では「結果画像を保存」を使ってね。';
-  show('#manual-copy', false); $('#retry').focus({ preventScroll: true }); $('#result-screen').scrollIntoView({ block: 'start', behavior: 'instant' });
-}
-function returnTitle() {
-  mode = 'title'; game = undefined; paused = false; renderer.reset(); syncHUD();
-  show('.layout', true); show('#result-screen', false); show('#title-screen', true); show('#play-overlay', false); show('#pause-screen', false); show('#finish-screen', false);
-  $('#status-text').textContent = '平和な川で、待ってるオウ。'; document.body.classList.remove('is-playing'); $('#start').focus({ preventScroll: true });
+function showResult() {
+  if (resultShown || !shot.result) return; resultShown = true; const r = shot.result, newBest = r.score > best; best = Math.max(best, r.score); saveValue('ouo-shot-best', best); syncBest();
+  $('#result-title').textContent = r.title; $('#result-comment').textContent = r.comment; $('#result-score').textContent = fmt(r.score);
+  $('#result-height').textContent = `${fmt(r.height)}m`; $('#result-rings').textContent = `${r.rings}連鎖`; $('#result-pressure').textContent = `${Math.round(r.pressure * 100)}%`;
+  $('#result-rank').textContent = r.busted ? 'ためすぎ。ピンクのうちに、離せ。' : r.perfect ? '限界寸前の一発。これが、カーニバル。' : 'まだ飛べる。ピンクになるまで、粘れ。';
+  show('#new-best', newBest); show('#live', false); show('#flight-label', false); show('#result', true); $('#phase').textContent = 'ONE SHOT. ONE LEGEND.';
+  $('#bottom-tip').textContent = 'もう一発。次こそ、宇宙。'; $('#retry').focus({ preventScroll: true });
 }
 function frame(now: number) {
-  const raw = Math.max(0, (now - last) / 1000); last = now;
-  if (mode === 'playing' && !paused) { game!.advance(raw); processSignals(); syncHUD(); if (mode === 'playing') sound.tick(game!.elapsed, game!.combo); }
-  if (mode === 'finishing') { finishTime += raw; if (finishTime >= CONFIG.finishDuration) finish(); }
-  if (mode !== 'result') renderer.draw(paused ? 0 : Math.min(raw, 0.04), game, settings.reducedMotion, mode === 'title');
-  if (game && mode === 'playing') { $('#callout').classList.toggle('visible', game.elapsed < calloutUntil); $('#event-banner').classList.toggle('visible', game.elapsed < eventUntil); $('#generation').classList.toggle('visible', game.elapsed < generationUntil); }
+  const dt = Math.max(0, (now - lastTime) / 1000); lastTime = now;
+  if (!document.hidden && !$<HTMLDialogElement>('#settings-dialog').open) {
+    shot.advance(dt); processEvents(); renderer.draw(Math.min(dt, .05), shot, settings.reducedMotion);
+    if (shot.mode === 'charging') {
+      const p = shot.pressure; sound.charge(p, shot.held);
+      $('#pressure').innerHTML = `${Math.floor(p * 100)}<small>%</small>`; $('#pressure').setAttribute('aria-valuenow', String(Math.floor(p * 100)));
+      $('#charge-label').textContent = p >= .92 ? 'いまだ。離せ！！！' : p >= .75 ? 'もう少し……！' : p >= .4 ? 'まだ、粘れ。' : '川を、ためろ。';
+      $('#hold-label').textContent = p >= .92 ? '離せ！！！' : p >= .75 ? 'ギリギリを狙え。' : 'まだ、離すな。';
+      $('#charge-sub').textContent = p >= .92 ? 'ためすぎると、決壊する。' : '横へずらして、輪を狙え。'; document.body.classList.toggle('perfect', p >= .92);
+    }
+    if (shot.mode === 'flight') { $('#altitude').innerHTML = `${fmt(Math.round(Math.max(0, SHOT.launchY - shot.y) * .8))}<span>m</span>`; $('#chain').textContent = `${shot.ringsHit} 連鎖`; }
+  }
   requestAnimationFrame(frame);
 }
-$('#game').addEventListener('pointerdown', (event) => {
-  if (mode !== 'playing' || paused) return; event.preventDefault();
-  const rect = $('#game').getBoundingClientRect(); game!.hit((event.clientX - rect.left) / rect.width * CONFIG.width, (event.clientY - rect.top) / rect.height * CONFIG.height); processSignals(); syncHUD();
-});
-$('#game').addEventListener('keydown', (event) => {
-  if (event.code !== 'Space' || event.repeat || mode !== 'playing' || paused) return; event.preventDefault();
-  const bucket = [...game!.buckets].filter(b => b.y >= 0).sort((a, b) => b.y - a.y)[0]; if (bucket) { game!.hit(bucket.x, bucket.y); processSignals(); syncHUD(); }
-});
-$('#start').addEventListener('click', start); $('#retry').addEventListener('click', start);
-$('#back-title').addEventListener('click', returnTitle);
-$('.brand').addEventListener('click', event => { event.preventDefault(); if (mode === 'playing' || mode === 'finishing') return; returnTitle(); });
-$('#pause').addEventListener('click', () => setPaused(true)); $('#resume').addEventListener('click', () => { void sound.unlock(); setPaused(false); $('#game').focus({ preventScroll: true }); });
-document.addEventListener('visibilitychange', () => { if (document.hidden) setPaused(true); last = performance.now(); });
-$('#mute').addEventListener('click', () => { settings.muted = !settings.muted; void sound.unlock(); updateSettings(); });
-$('#mute-setting').addEventListener('change', event => { settings.muted = (event.target as HTMLInputElement).checked; updateSettings(); });
-$('#volume').addEventListener('input', event => { settings.volume = Number((event.target as HTMLInputElement).value) / 100; updateSettings(); });
-$('#motion').addEventListener('change', event => { settings.reducedMotion = (event.target as HTMLInputElement).checked; updateSettings(); });
-$('#settings-open').addEventListener('click', () => { setPaused(true); $<HTMLDialogElement>('#settings-dialog').showModal(); });
-for (const button of document.querySelectorAll<HTMLButtonElement>('.learn-open')) button.addEventListener('click', () => { setPaused(true); $<HTMLDialogElement>('#learn-dialog').showModal(); });
-for (const button of document.querySelectorAll<HTMLButtonElement>('.dialog-close')) button.addEventListener('click', () => button.closest('dialog')!.close());
-async function copyOrShow(text: string) {
-  if (await copyText(text)) toast('コピーしたオウ！'); else { $<HTMLTextAreaElement>('#share-copy').value = text; show('#manual-copy', true); $<HTMLDetailsElement>('#manual-copy').open = true; toast('表示された文章を選択してコピーしてね。'); }
+const hold = $('#hold');
+hold.addEventListener('pointerdown', event => { if (event.button !== 0 || pointer !== undefined || shot.mode !== 'idle') return; event.preventDefault(); pointer = event.pointerId; startX = event.clientX; hold.setPointerCapture(event.pointerId); begin(); });
+hold.addEventListener('pointermove', event => { if (event.pointerId === pointer) shot.aimAt((event.clientX - startX) / $('#game').getBoundingClientRect().width * SHOT.width); });
+hold.addEventListener('pointerup', event => { if (event.pointerId !== pointer) return; event.preventDefault(); pointer = undefined; release(); });
+hold.addEventListener('pointercancel', cancel); hold.addEventListener('lostpointercapture', () => { if (pointer !== undefined) cancel(); });
+hold.addEventListener('keydown', event => { if (event.code === 'Space' || event.code === 'Enter') { event.preventDefault(); if (!event.repeat) begin(); } else if (event.code === 'ArrowLeft') { event.preventDefault(); shot.aimAt(shot.aim * 135 - 20); } else if (event.code === 'ArrowRight') { event.preventDefault(); shot.aimAt(shot.aim * 135 + 20); } });
+hold.addEventListener('keyup', event => { if (event.code === 'Space' || event.code === 'Enter') { event.preventDefault(); release(); } });
+hold.addEventListener('click', event => { if (event.detail === 0) { if (shot.mode === 'idle') begin(); else if (shot.mode === 'charging') release(); } });
+$('#retry').addEventListener('click', reset); $('#reset').addEventListener('click', reset); $('.brand').addEventListener('click', event => { event.preventDefault(); reset(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) cancel(); lastTime = performance.now(); }); window.addEventListener('blur', cancel); window.addEventListener('resize', () => renderer.resize());
+$('#mute').addEventListener('click', () => { settings.muted = !settings.muted; void sound.unlock(); syncSettings(); });
+$('#settings').addEventListener('click', () => { cancel(); $<HTMLDialogElement>('#settings-dialog').showModal(); });
+$('#close-settings').addEventListener('click', () => { $<HTMLDialogElement>('#settings-dialog').close(); lastTime = performance.now(); });
+$('#audio-setting').addEventListener('change', e => { settings.muted = !(e.target as HTMLInputElement).checked; void sound.unlock(); syncSettings(); });
+$('#volume').addEventListener('input', e => { settings.volume = Number((e.target as HTMLInputElement).value) / 100; syncSettings(); });
+$('#motion').addEventListener('change', e => { settings.reducedMotion = (e.target as HTMLInputElement).checked; syncSettings(); });
+function publicUrl() { const url = new URL(location.href); if (url.protocol === 'file:') return ''; url.hash = ''; url.search = ''; return url.href; }
+function resultText(r: ShotResult) { return `一発で${fmt(r.height)}m、${r.rings}連鎖。${r.title} ${fmt(r.score)}オウオ点！ #サンショウオウオカーニバル\n${publicUrl()}`; }
+function resultCanvas(r: ShotResult) {
+  const canvas = document.createElement('canvas'); canvas.width = 1080; canvas.height = 1920; const c = canvas.getContext('2d')!;
+  c.fillStyle = '#17291e'; c.fillRect(0, 0, 1080, 1920); const text = (s: string, y: number, size: number, color = '#f6f3e8') => { c.fillStyle = color; c.font = `900 ${size}px sans-serif`; c.textAlign = 'center'; c.fillText(s, 540, y, 960); };
+  text('サンショウオウオカーニバル', 150, 48); text('一発オウオ砲 / ONE SHOT', 220, 25, '#dfff74');
+  text(r.title, 445, 77, r.busted ? '#ff9acb' : '#dfff74'); text(fmt(r.score), 710, 170); text('OUO POINTS', 775, 32);
+  text(`${fmt(r.height)}m     ${r.rings}連鎖     圧 ${Math.round(r.pressure * 100)}%`, 920, 40); text(r.comment, 1040, 28);
+  for (let i = 0; i < 16; i++) ouo(c, 60 + i % 4 * 290, 1180 + Math.floor(i / 4) * 140, 1.7, ['#dfff74', '#ff9acb', '#8fe4c2'][i % 3], (i % 3 - 1) * .2, 0, true);
+  text('指を離すと、宇宙が始まる。', 1770, 43, '#dfff74'); text(publicUrl() || 'ONE FINGER. ONE SHOT. ALL OUO.', 1850, 24); return canvas;
 }
-$('#copy-url').addEventListener('click', () => {
-  const url = gameUrl();
-  if (url) void copyOrShow(url);
-  else toast('ダウンロード版です。このHTMLファイルを渡すと一緒に遊べます。');
-});
-$('#save-image').addEventListener('click', async () => { try { if (resultImage) { downloadImage(await resultImage); toast('結果画像を保存。スマホでは画像メニューから保存できるよ。'); } } catch { toast('画像を作れませんでした。もう一度試してね。'); } });
-$('#native-share').addEventListener('click', async () => {
-  if (!currentResult) return;
-  const text = shareText(currentResult, resultLabel.title);
+async function blob(): Promise<Blob> { if (!shot.result) throw new Error('No result'); const canvas = resultCanvas(shot.result); return new Promise((resolve, reject) => canvas.toBlob(b => b ? resolve(b) : reject(new Error('PNG unavailable')), 'image/png')); }
+$('#save').addEventListener('click', async () => { try { const image = await blob(), url = URL.createObjectURL(image), a = document.createElement('a'); a.href = url; a.download = 'one-shot-ouo.png'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 60000); toast('この一発、画像にしたオウ。'); } catch { toast('画像を作れませんでした。もう一度試してね。'); } });
+$('#share').addEventListener('click', async () => {
+  if (!shot.result) return; const text = resultText(shot.result);
   try {
-    const blob = resultImage ? await resultImage : undefined;
-    const file = blob ? new File([blob], 'ouo-carnival.png', { type: 'image/png' }) : undefined;
-    if (file && navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], title: 'サンショウオウオカーニバル', text });
-    else if (navigator.share) await navigator.share({ title: 'サンショウオウオカーニバル', text });
-    else await copyOrShow(text);
-  } catch (error) { if (!(error instanceof DOMException && error.name === 'AbortError')) toast('共有できませんでした。「結果画像を保存」を使ってね。'); }
+    const file = new File([await blob()], 'one-shot-ouo.png', { type: 'image/png' });
+    if (navigator.canShare?.({ files: [file] })) await navigator.share({ text, files: [file] });
+    else if (navigator.share) await navigator.share({ text });
+    else { try { await navigator.clipboard.writeText(text); toast('結果をコピーしたオウ。画像も保存できるよ。'); } catch { $<HTMLTextAreaElement>('#copy-fallback').value = text; show('#copy-fallback', true); toast('文章を選択してコピーしてね。'); } }
+  } catch (e) { if (!(e instanceof DOMException && e.name === 'AbortError')) toast('共有できませんでした。「画像にする」を使ってね。'); }
 });
-$('#share-x').addEventListener('click', () => {
-  if (!currentResult) return;
-  const text = shareText(currentResult, resultLabel.title);
-  $<HTMLTextAreaElement>('#share-copy').value = text; show('#manual-copy', true); $<HTMLDetailsElement>('#manual-copy').open = true;
-  window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
-  toast('画像は自動添付されません。保存した画像を投稿に追加してね。');
-});
-window.addEventListener('resize', () => renderer.resize());
-$('#title-best').textContent = number(best); updateSettings(); requestAnimationFrame(frame);
-// Dev-only deterministic browser inspection. Never included as a public production API.
-if (import.meta.env.DEV) Object.defineProperty(window, '__ouo', { value: { get game() { return game; }, get mode() { return mode; }, get paused() { return paused; } } });
+syncSettings(); syncBest(); requestAnimationFrame(frame);
+if (import.meta.env.DEV) Object.defineProperty(window, '__ouo', { value: { get shot() { return shot; } } });
