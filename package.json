@@ -1,6 +1,6 @@
 {
   "name": "sansho-carnival",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,13 +8,16 @@
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
-    "test:browser": "node scripts/browser-test.mjs",
+    "test:browser": "node scripts/carnival-browser.mjs",
     "preview": "vite preview --host 0.0.0.0",
-    "assets:ogp": "node scripts/generate-ogp.mjs",
-    "test:production": "TEST_URL=http://127.0.0.1:4173 node scripts/browser-test.mjs",
+    "assets:ogp": "node scripts/carnival-ogp.mjs",
+    "test:production": "node scripts/carnival-production.mjs",
     "build:standalone": "npm run build && node scripts/build-standalone.mjs",
     "build:pages": "npm run build:standalone && node scripts/build-pages.mjs",
-    "test:pages": "TEST_URL=http://127.0.0.1:4174/sansho/ node scripts/browser-test.mjs"
+    "test:pages": "TEST_URL=http://127.0.0.1:4190/sansho/ node scripts/carnival-production.mjs",
+    "test:one-shot": "TEST_URL=http://127.0.0.1:5173/one-shot/index.html node scripts/browser-test.mjs",
+    "assets:one-shot-ogp": "node scripts/generate-ogp.mjs",
+    "serve:pages": "node scripts/serve-pages.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.0",

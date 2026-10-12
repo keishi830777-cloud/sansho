@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile, copyFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, copyFile, cp } from 'node:fs/promises';
 const url = new URL(process.env.STATIC_SITE_URL || 'https://keishi830777-cloud.github.io/sansho/');
 if (url.protocol !== 'https:') throw new Error('STATIC_SITE_URL must use HTTPS');
 const escape = value => value.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;');
@@ -8,4 +8,5 @@ await mkdir('.pages', { recursive: true });
 await writeFile('.pages/index.html', html);
 await copyFile('public/ogp.png', '.pages/ogp.png');
 await writeFile('.pages/.nojekyll', '');
+await cp('public/one-shot', '.pages/one-shot', { recursive: true });
 console.log('Prepared .pages/ for static hosting; nothing uploaded.');
