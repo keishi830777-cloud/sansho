@@ -1,0 +1,11 @@
+import { mkdir, readFile, writeFile, copyFile } from 'node:fs/promises';
+const url = new URL(process.env.STATIC_SITE_URL || 'https://keishi830777-cloud.github.io/sansho/');
+if (url.protocol !== 'https:') throw new Error('STATIC_SITE_URL must use HTTPS');
+const escape = value => value.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;');
+let html = await readFile('ouo-play.html', 'utf8');
+html = html.replace('</head>', `<meta property="og:image" content="${escape(new URL('ogp.png', url).href)}">\n<meta property="og:url" content="${escape(url.href)}">\n<link rel="canonical" href="${escape(url.href)}">\n</head>`);
+await mkdir('.pages', { recursive: true });
+await writeFile('.pages/index.html', html);
+await copyFile('public/ogp.png', '.pages/ogp.png');
+await writeFile('.pages/.nojekyll', '');
+console.log('Prepared .pages/ for static hosting; nothing uploaded.');
